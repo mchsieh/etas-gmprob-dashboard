@@ -1,0 +1,489 @@
+<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="utf-8">
+<meta http-equiv="refresh" content="600">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ETAS-GMprob 地震動機率評估</title>
+<link rel="icon" type="image/png" href="edream_logo.png">
+<meta name="description" content="台灣地區地震動機率之每小時自動化評估（ETAS 模型）— E-DREaM，國立中央大學">
+<meta property="og:title" content="ETAS-GMprob 地震動機率評估">
+<meta property="og:description" content="台灣地區地震動機率之每小時自動化評估（ETAS 模型）— E-DREaM，國立中央大學">
+<meta property="og:image" content="https://mchsieh.github.io/etas-gmprob-dashboard/edream_logo.png">
+<meta property="og:type" content="website">
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root { --brown:#5a4028; --brown2:#8a6a45; --ink:#2b241c; --ink2:#6f6353;
+        --line:#e6dcc9; --surface:#fffdf7; --bg:#f4eee1; --amber:#c9820e; }
+* { box-sizing: border-box; }
+body { font-family: "Inter","Noto Sans TC","Microsoft JhengHei",sans-serif;
+       margin:0; background:var(--bg); color:var(--ink); }
+header { background:linear-gradient(135deg,#4a3624 0%,#6b4c2c 100%);
+         color:#f7efe2; padding:10px 28px; display:flex; align-items:center; gap:14px; }
+header img.logo { width:44px; height:44px; border-radius:50%;
+                  box-shadow:0 1px 4px rgba(0,0,0,.35); background:#fff; }
+header h1 { margin:0; font-size:17px; font-weight:600; letter-spacing:.5px; }
+header .org { font-size:11.5px; opacity:.8; margin-top:2px; }
+.langbtn { margin-left:auto; color:#f7efe2; border:1px solid rgba(247,239,226,.55);
+  border-radius:15px; padding:5px 14px; font-size:12.5px; text-decoration:none; }
+.langbtn:hover { background:rgba(247,239,226,.15); }
+.hero { background:var(--surface); border-bottom:1px solid var(--line); }
+.hero .in { max-width:1060px; margin:0 auto; padding:16px;
+            display:flex; align-items:baseline; flex-wrap:wrap; gap:8px 26px; }
+.hero .label { font-size:13px; color:var(--brown2); letter-spacing:1px; }
+.hero .time { font-size:31px; font-weight:700; color:var(--brown);
+              font-variant-numeric:tabular-nums; letter-spacing:.5px; }
+.hero .meta { font-size:12.5px; color:var(--ink2); }
+main { max-width:1060px; margin:0 auto; padding:18px 16px; }
+.card { background:var(--surface); border:1px solid var(--line); border-radius:10px;
+        padding:18px 22px; margin-bottom:18px; }
+.card h2 { font-size:15.5px; margin:0 0 12px 0; color:var(--brown); font-weight:650; }
+.card .note { font-size:12.5px; color:var(--ink2); margin:2px 0 10px; }
+.tiles { display:grid; grid-template-columns:repeat(7,1fr); gap:10px; }
+.tile { border:1px solid var(--line); border-radius:8px; padding:10px 8px; text-align:center; }
+.tile .v { font-size:21px; font-weight:650; }
+.tile .s { font-size:12px; color:var(--ink2); margin-top:3px; }
+table.prob { border-collapse:collapse; font-size:12.8px; width:100%; }
+table.prob th, table.prob td { border:1px solid var(--line); padding:5px 9px; }
+table.prob thead th { background:#f6efe0; color:var(--brown); font-weight:600; }
+table.prob td.num { text-align:right; font-variant-numeric:tabular-nums; }
+table.prob td.site { font-weight:600; }
+.maps { display:flex; flex-wrap:wrap; gap:6px; justify-content:center; }
+.tscroll { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+.tscroll table.prob { min-width:540px; }
+.qwrap { display:flex; flex-wrap:wrap; gap:16px; }
+.qwrap > div:first-child { flex:1 1 430px; }
+.qwrap > div:last-child { flex:1 1 380px; max-height:620px; overflow:auto; }
+.qwrap > div:last-child table.prob { min-width:470px; }
+#quakemap { height:620px; border-radius:8px; border:1px solid var(--line); }
+.leaflet-container { font:inherit; }
+/* pulsing rings for events in the past 24 h (hue keyed to event age, set inline via --h) */
+.qk-ripple { position:relative; width:0; height:0; pointer-events:none; }
+.qk-ripple span { position:absolute; left:0; top:0; width:var(--d); height:var(--d);
+  margin:calc(var(--d) / -2) 0 0 calc(var(--d) / -2); border-radius:50%;
+  background:radial-gradient(circle, hsla(var(--h),85%,42%,0) 32%, hsla(var(--h),85%,40%,.72) 60%, hsla(var(--h),90%,32%,0) 72%);
+  border:1.8px solid hsla(var(--h),85%,32%,.95); transform:scale(.2); opacity:0;
+  animation: qk-pulse 2.8s ease-out infinite, qk-hue 5.6s ease-in-out infinite; }
+.qk-ripple span:nth-child(2) { animation-delay:.93s, 0s; }
+.qk-ripple span:nth-child(3) { animation-delay:1.87s, 0s; }
+@keyframes qk-pulse { 0% { transform:scale(.2); opacity:1; } 70% { opacity:.55; } 100% { transform:scale(1); opacity:0; } }
+@keyframes qk-hue { 0% { filter:hue-rotate(0deg); } 50% { filter:hue-rotate(-18deg); } 100% { filter:hue-rotate(0deg); } }
+.qk-legend-dot { display:inline-block; width:12px; height:12px; border-radius:50%; vertical-align:-2px; margin-right:4px;
+  background:radial-gradient(circle, hsla(322,85%,40%,.15) 30%, hsla(322,85%,40%,.85) 65%, transparent 72%); border:1.5px solid hsl(322,85%,32%); }
+@media (prefers-reduced-motion: reduce) { .qk-ripple span { animation:none; transform:scale(.55); opacity:.5; } }
+/* 24 h / 72 h window switch */
+.winsw { display:inline-flex; border:1px solid #c9b48f; border-radius:999px; overflow:hidden; vertical-align:middle; background:#fffdf7; }
+.winsw button { border:0; background:transparent; color:#5a4028; padding:4px 13px; font:inherit; font-size:13px; font-weight:600; cursor:pointer; line-height:1.3; }
+.winsw button small { font-size:11px; font-weight:500; margin-left:2px; }
+.winsw button.on { background:#5a4028; color:#fff; }
+body[data-win="24"] .only72 { display:none !important; }
+body[data-win="72"] .only24 { display:none !important; }
+.depth-legend { background:#fffdf7; padding:8px 11px; border-radius:6px;
+  box-shadow:0 1px 4px rgba(60,40,10,.25); font-size:12px; line-height:1.7; color:#2b241c; }
+.depth-legend .dot { display:inline-block; width:11px; height:11px; border-radius:50%;
+  border:1.5px solid #fff; box-shadow:0 0 0 1px #999; margin-right:6px; }
+.hist { font-size:13px; line-height:1.9; column-count:3; }
+.hist a { color:#a05e14; text-decoration:none; }
+.banner { background:#fdf3e3; border:1px solid #e3b04b; color:#6b4308;
+          border-radius:6px; padding:8px 12px; font-size:12.5px; margin-bottom:10px; }
+footer { text-align:center; color:#988b78; font-size:12px; padding:12px; }
+.fab { position:fixed; right:22px; bottom:24px; z-index:1500; cursor:pointer;
+  background:linear-gradient(135deg,#6b4c2c,#8a6a45); color:#f7efe2; border:none;
+  border-radius:26px; padding:12px 19px; font-size:13.5px; font-family:inherit;
+  display:flex; align-items:center; gap:8px;
+  box-shadow:0 3px 14px rgba(40,25,8,.35); transition:transform .12s, box-shadow .12s; }
+.fab:hover { transform:translateY(-2px); box-shadow:0 6px 18px rgba(40,25,8,.42); }
+.fab .i { display:inline-flex; width:18px; height:18px; border-radius:50%;
+  border:1.6px solid #f7efe2; align-items:center; justify-content:center;
+  font-size:12px; font-style:italic; font-weight:700; }
+.modal-overlay { display:none; position:fixed; inset:0; z-index:2000;
+  background:rgba(43,36,28,.55); align-items:center; justify-content:center; padding:16px; }
+.modal-overlay.open { display:flex; }
+.modal { background:var(--surface); border-radius:12px; max-width:640px; width:100%;
+  max-height:86vh; overflow-y:auto; padding:26px 30px;
+  box-shadow:0 8px 40px rgba(30,20,8,.4); position:relative; }
+.modal h3 { margin:0 0 14px 0; color:var(--brown); font-size:17px; }
+.modal h4 { margin:16px 0 6px 0; color:var(--brown2); font-size:13.5px; }
+.modal p { font-size:13.5px; line-height:1.75; margin:6px 0; }
+.modal .ref { background:#f6efe0; border-radius:8px; padding:10px 14px;
+  font-size:12.8px; line-height:1.6; margin-top:8px; }
+.modal .ref a { color:#a05e14; }
+.modal .close { position:absolute; top:12px; right:16px; border:none; background:none;
+  font-size:22px; color:var(--ink2); cursor:pointer; line-height:1; }
+@media (max-width:760px){ .tiles{grid-template-columns:repeat(4,1fr);} .hist{column-count:2;}
+  .hero .time{font-size:24px;} }
+@media (max-width:520px){
+  .tiles{grid-template-columns:repeat(3,1fr); gap:7px;}
+  .tile .v{font-size:17px;}
+  .card{padding:13px 14px;}
+  main{padding:12px 8px;}
+  .hero .in{padding:12px; gap:4px 14px;}
+  #quakemap{height:430px;}
+  .fab{padding:12px; border-radius:50%;}
+  .fab .txt{display:none;}
+}
+</style></head><body data-win="24">
+<header><img class="logo" src="edream_logo.png" alt="E-DREaM">
+<div><h1>ETAS-GMprob 地震動機率評估</h1>
+<div class="org">E-DREaM 地震災害風險評估與管理研究中心｜國立中央大學</div></div>
+<a class="langbtn" href="en.html">EN</a></header>
+<div class="hero"><div class="in">
+<span class="label">評估時刻</span>
+<span class="time">2026-09-27 06:00</span>
+<span class="meta">台灣時間｜評估區間：未來 <span class="wh">24</span> 小時（至 <span class="wv" data-v24="09-28 06:00" data-v72="09-30 06:00">09-28 06:00</span>）｜報告 ID202609262200TN0｜每小時更新</span>
+<span class="winsw" role="group"><button type="button" data-win="24" class="on">24<small>小時</small></button><button type="button" data-win="72">72<small>小時</small></button></span>
+</div></div>
+<main>
+<div class="card"><h2>未來 <span class="wh">24</span> 小時內達震度 3（I &ge; I₃）之機率</h2>
+<div class="tiles only24"><div class="tile" style="background:rgba(201,130,14,0.045);"><div class="v">1.60%</div><div class="s">Taipei</div></div><div class="tile" style="background:rgba(201,130,14,0.212);"><div class="v">7.60%</div><div class="s">Yilan</div></div><div class="tile" style="background:rgba(201,130,14,0.050);"><div class="v">1.80%</div><div class="s">Taichung</div></div><div class="tile" style="background:rgba(201,130,14,0.075);"><div class="v">2.70%</div><div class="s">Tainan</div></div><div class="tile" style="background:rgba(201,130,14,0.170);"><div class="v">6.10%</div><div class="s">Chiayi</div></div><div class="tile" style="background:rgba(201,130,14,0.340);"><div class="v">12.20%</div><div class="s">Hualien</div></div><div class="tile" style="background:rgba(201,130,14,0.092);"><div class="v">3.30%</div><div class="s">Taitung</div></div></div><div class="tiles only72"><div class="tile" style="background:rgba(201,130,14,0.043);"><div class="v">4.70%</div><div class="s">Taipei</div></div><div class="tile" style="background:rgba(201,130,14,0.253);"><div class="v">28.00%</div><div class="s">Yilan</div></div><div class="tile" style="background:rgba(201,130,14,0.025);"><div class="v">2.80%</div><div class="s">Taichung</div></div><div class="tile" style="background:rgba(201,130,14,0.050);"><div class="v">5.50%</div><div class="s">Tainan</div></div><div class="tile" style="background:rgba(201,130,14,0.116);"><div class="v">12.80%</div><div class="s">Chiayi</div></div><div class="tile" style="background:rgba(201,130,14,0.340);"><div class="v">37.60%</div><div class="s">Hualien</div></div><div class="tile" style="background:rgba(201,130,14,0.108);"><div class="v">11.90%</div><div class="s">Taitung</div></div></div></div>
+
+<div class="card"><h2>各站點逐震度超越機率（未來 <span class="wh">24</span> 小時）</h2>
+<div id="curves"></div><div class="only24"><div class="tscroll"><table class="prob"><thead><tr><th>Site</th><th>&ge; I3</th><th>&ge; I4</th><th>&ge; I5</th><th>&ge; I6</th><th>&ge; I7</th></tr></thead><tbody><tr><td class="site">Taipei</td><td class="num" style="background:rgba(201,130,14,0.045);">1.60%</td><td class="num" style="background:rgba(201,130,14,0.000);">&lt;0.01%</td><td class="num" style="background:rgba(201,130,14,0.000);">&lt;0.01%</td><td class="num" style="background:rgba(201,130,14,0.000);">&lt;0.01%</td><td class="num" style="background:rgba(201,130,14,0.000);">&lt;0.01%</td></tr><tr><td class="site">Yilan</td><td class="num" style="background:rgba(201,130,14,0.212);">7.60%</td><td class="num" style="background:rgba(201,130,14,0.042);">1.50%</td><td class="num" style="background:rgba(201,130,14,0.003);">0.10%</td><td class="num" style="background:rgba(201,130,14,0.000);">&lt;0.01%</td><td class="num" style="background:rgba(201,130,14,0.000);">&lt;0.01%</td></tr><tr><td class="site">Taichung</td><td class="num" style="background:rgba(201,130,14,0.050);">1.80%</td><td class="num" style="background:rgba(201,130,14,0.011);">0.40%</td><td class="num" style="background:rgba(201,130,14,0.000);">&lt;0.01%</td><td class="num" style="background:rgba(201,130,14,0.000);">&lt;0.01%</td><td class="num" style="background:rgba(201,130,14,0.000);">&lt;0.01%</td></tr><tr><td class="site">Tainan</td><td class="num" style="background:rgba(201,130,14,0.075);">2.70%</td><td class="num" style="background:rgba(201,130,14,0.006);">0.20%</td><td class="num" style="background:rgba(201,130,14,0.003);">0.10%</td><td class="num" style="background:rgba(201,130,14,0.003);">0.10%</td><td class="num" style="background:rgba(201,130,14,0.000);">&lt;0.01%</td></tr><tr><td class="site">Chiayi</td><td class="num" style="background:rgba(201,130,14,0.170);">6.10%</td><td class="num" style="background:rgba(201,130,14,0.036);">1.30%</td><td class="num" style="background:rgba(201,130,14,0.008);">0.30%</td><td class="num" style="background:rgba(201,130,14,0.000);">&lt;0.01%</td><td class="num" style="background:rgba(201,130,14,0.000);">&lt;0.01%</td></tr><tr><td class="site">Hualien</td><td class="num" style="background:rgba(201,130,14,0.340);">12.20%</td><td class="num" style="background:rgba(201,130,14,0.072);">2.60%</td><td class="num" style="background:rgba(201,130,14,0.006);">0.20%</td><td class="num" style="background:rgba(201,130,14,0.000);">&lt;0.01%</td><td class="num" style="background:rgba(201,130,14,0.000);">&lt;0.01%</td></tr><tr><td class="site">Taitung</td><td class="num" style="background:rgba(201,130,14,0.092);">3.30%</td><td class="num" style="background:rgba(201,130,14,0.011);">0.40%</td><td class="num" style="background:rgba(201,130,14,0.003);">0.10%</td><td class="num" style="background:rgba(201,130,14,0.000);">&lt;0.01%</td><td class="num" style="background:rgba(201,130,14,0.000);">&lt;0.01%</td></tr></tbody></table></div></div><div class="only72"><div class="tscroll"><table class="prob"><thead><tr><th>Site</th><th>&ge; I3</th><th>&ge; I4</th><th>&ge; I5</th><th>&ge; I6</th><th>&ge; I7</th></tr></thead><tbody><tr><td class="site">Taipei</td><td class="num" style="background:rgba(201,130,14,0.043);">4.70%</td><td class="num" style="background:rgba(201,130,14,0.002);">0.20%</td><td class="num" style="background:rgba(201,130,14,0.000);">&lt;0.01%</td><td class="num" style="background:rgba(201,130,14,0.000);">&lt;0.01%</td><td class="num" style="background:rgba(201,130,14,0.000);">&lt;0.01%</td></tr><tr><td class="site">Yilan</td><td class="num" style="background:rgba(201,130,14,0.253);">28.00%</td><td class="num" style="background:rgba(201,130,14,0.043);">4.80%</td><td class="num" style="background:rgba(201,130,14,0.003);">0.30%</td><td class="num" style="background:rgba(201,130,14,0.000);">&lt;0.01%</td><td class="num" style="background:rgba(201,130,14,0.000);">&lt;0.01%</td></tr><tr><td class="site">Taichung</td><td class="num" style="background:rgba(201,130,14,0.025);">2.80%</td><td class="num" style="background:rgba(201,130,14,0.004);">0.40%</td><td class="num" style="background:rgba(201,130,14,0.001);">0.10%</td><td class="num" style="background:rgba(201,130,14,0.000);">&lt;0.01%</td><td class="num" style="background:rgba(201,130,14,0.000);">&lt;0.01%</td></tr><tr><td class="site">Tainan</td><td class="num" style="background:rgba(201,130,14,0.050);">5.50%</td><td class="num" style="background:rgba(201,130,14,0.005);">0.60%</td><td class="num" style="background:rgba(201,130,14,0.000);">&lt;0.01%</td><td class="num" style="background:rgba(201,130,14,0.000);">&lt;0.01%</td><td class="num" style="background:rgba(201,130,14,0.000);">&lt;0.01%</td></tr><tr><td class="site">Chiayi</td><td class="num" style="background:rgba(201,130,14,0.116);">12.80%</td><td class="num" style="background:rgba(201,130,14,0.034);">3.80%</td><td class="num" style="background:rgba(201,130,14,0.009);">1.00%</td><td class="num" style="background:rgba(201,130,14,0.001);">0.10%</td><td class="num" style="background:rgba(201,130,14,0.001);">0.10%</td></tr><tr><td class="site">Hualien</td><td class="num" style="background:rgba(201,130,14,0.340);">37.60%</td><td class="num" style="background:rgba(201,130,14,0.079);">8.70%</td><td class="num" style="background:rgba(201,130,14,0.013);">1.40%</td><td class="num" style="background:rgba(201,130,14,0.000);">&lt;0.01%</td><td class="num" style="background:rgba(201,130,14,0.000);">&lt;0.01%</td></tr><tr><td class="site">Taitung</td><td class="num" style="background:rgba(201,130,14,0.108);">11.90%</td><td class="num" style="background:rgba(201,130,14,0.014);">1.60%</td><td class="num" style="background:rgba(201,130,14,0.002);">0.20%</td><td class="num" style="background:rgba(201,130,14,0.000);">&lt;0.01%</td><td class="num" style="background:rgba(201,130,14,0.000);">&lt;0.01%</td></tr></tbody></table></div></div></div>
+
+<div class="card"><h2>機率時序變化（近 7 天，每小時評估）</h2>
+<div class="note">各站點未來 <span class="wh">24</span> 小時內達震度 I₃ 之機率，隨評估時刻的演變。垂直線＝目錄地震發生時刻（顏色同「地震活動分佈」之深度分色，>150 km 為灰色虛線；圖頂 ▽ 可懸停查看事件資訊）。</div>
+<div id="ts-i3"></div></div>
+
+<div class="card"><h2>地震活動分佈（地震目錄，規模 M &ge; 3）</h2>
+<div class="banner" id="quake-banner" style="display:none;"></div>
+<div class="note" id="quake-note"></div>
+<div class="qwrap"><div><div id="quakemap"></div></div>
+<div><table class="prob" id="quaketab"><thead>
+<tr><th>時間（台灣）</th><th>規模</th><th>深度 km</th><th>經度</th><th>緯度</th></tr>
+</thead><tbody></tbody></table></div></div></div>
+
+<div class="card"><h2>條件強度與模擬 M6+ 地震（單位：事件數／平方度／日，對數色階）</h2>
+<div class="note">左：條件強度（Conditional Intensity）｜右：疊加模擬 M6+ 合成事件（星號）。<span id="sim-note"></span>　滑鼠移到圖上可讀取各格點數值；兩圖共用色階。虛線範圍為 地殼震源分區；三角形＝評估站點。</div>
+<div class="maps"><div id="map-cond"></div><div id="map-sim"></div></div></div>
+
+</main>
+<button class="fab" onclick="document.getElementById('about-modal').classList.add('open')">
+<span class="i">i</span><span class="txt">評估技術簡介</span></button>
+<div class="modal-overlay" id="about-modal" onclick="if(event.target===this)this.classList.remove('open')">
+<div class="modal">
+<button class="close" onclick="document.getElementById('about-modal').classList.remove('open')">&times;</button>
+<h3>評估技術簡介</h3>
+<h4>方法概述</h4>
+<p>本頁採用 ETAS（Epidemic-Type Aftershock Sequence）統計地震學模型，以中央氣象署地震目錄（規模 M &ge; 3）每小時更新模型，計算全區的<b>條件強度</b>（Conditional Intensity）——即當下地震發生率的空間分布。模型參數係於 地殼震源分區內最佳化，且僅採用震源深度 150 km 以內之地震。</p>
+<h4>機率計算流程</h4>
+<p>依據條件強度進行<b>地震活動模擬</b>，產生 1,000 組未來 24 小時（及 72 小時）的<b>虛擬地震目錄</b>；再將虛擬目錄代入適用於台灣的<b>地震動模型</b>（Ground-Motion Model, GMM），統計出各站點的震度超越機率（I &ge; I₃ 至 I &ge; I₇）。</p>
+<h4>使用限制</h4>
+<p>本頁內容為研究性質之機率評估產品：數值代表統計意義上的發生可能性，並非對特定地震的預測，亦非官方警報。正式地震資訊請以中央氣象署發布為準。</p>
+<h4>參考文獻</h4>
+<div class="ref">Hsieh, M.-C., et al. (2024). Toward Real-Time Ground-Shaking-Intensity Forecasting Using ETAS and GMM: Insights from the Analysis of the 2022 Taitung Earthquake Sequence. <i>Seismological Research Letters</i>, 95(6).
+<a href="https://pubs.geoscienceworld.org/ssa/srl/article-abstract/95/6/3264/645862/" target="_blank" rel="noopener">前往期刊頁面</a></div>
+</div></div>
+<footer>頁面產生時間 2026-09-27 06:21:06｜E-DREaM, NCU｜歷史資訊請洽 E-DREaM 中心｜本頁每 10 分鐘自動重新整理</footer>
+<script>
+var SITE_COLORS = ["#3f66d4","#e88a1a","#16b0a0","#b8232f","#7a2b8f","#2f7d32","#d6549e"];
+var FONT = {family:'Inter,"Noto Sans TC",sans-serif', size:12, color:'#2b241c'};
+// Model uses quakes <= 150 km depth (optimized within crustal seismogenic zones); deeper events muted
+var DEPTH_BINS = [[30,'#d7402b','< 30 km'],[70,'#f2a516','30–70 km'],[150,'#1f9e93','70–150 km']];
+var DEEP_FILL = '#b8bdc4', DEEP_EDGE = '#7d838a';
+function depthColor(d){for(var i=0;i<DEPTH_BINS.length;i++){if(d<DEPTH_BINS[i][0])return DEPTH_BINS[i][1];}return DEEP_FILL;}
+// Inferno-like scale (black-purple-orange-yellow): strong top-end contrast highlights recent activity
+var INFERNO = [[0,'#000004'],[0.13,'#1b0c41'],[0.27,'#4a0c6b'],[0.4,'#781c6d'],
+  [0.53,'#a52c60'],[0.65,'#cf4446'],[0.77,'#ed6925'],[0.88,'#fb9b06'],[1,'#f7d13d']];
+function coastTraces(D){
+  return D.coast.map(function(seg){
+    return {type:'scatter', mode:'lines', x:seg.map(function(p){return p[0];}),
+            y:seg.map(function(p){return p[1];}), line:{color:'#ffffff', width:1},
+            hoverinfo:'skip', showlegend:false};
+  });
+}
+function polyTrace(D){
+  var pts = D.polygon.concat([D.polygon[0]]);
+  return {type:'scatter', mode:'lines', x:pts.map(function(p){return p[0];}),
+          y:pts.map(function(p){return p[1];}),
+          line:{color:'#ffffff', width:1, dash:'dot'}, hoverinfo:'skip', showlegend:false};
+}
+function stationTrace(D){
+  return {type:'scatter', mode:'markers', x:D.stations.map(function(s){return s.lon;}),
+    y:D.stations.map(function(s){return s.lat;}),
+    text:D.stations.map(function(s){return s.name;}),
+    marker:{symbol:'triangle-up', size:11,
+      color:D.stations.map(function(s,i){return SITE_COLORS[i];}),
+      line:{color:'#ffffff', width:1.5}},
+    hovertemplate:'%{text}<extra>Site</extra>', showlegend:false};
+}
+function mapLayout(D, w, h, extra){
+  var L = {width:w, height:h, font:FONT, margin:{l:44,r:8,t:26,b:34},
+    paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'#efe8d8',
+    xaxis:{range:[D.region[0],D.region[1]], showgrid:false, zeroline:false,
+           ticks:'outside', ticklen:3, title:'', constrain:'domain'},
+    yaxis:{range:[D.region[2],D.region[3]], showgrid:false, zeroline:false,
+           ticks:'outside', ticklen:3, scaleanchor:'x', scaleratio:1.092, title:'',
+           constrain:'domain'},
+    showlegend:false};
+  for (var k in (extra||{})) L[k] = extra[k];
+  return L;
+}
+function heatTrace(D, grid, showbar){
+  var z=[], cd=[];
+  for (var j=0;j<grid.length;j++){
+    var zr=[], cr=[];
+    for (var i=0;i<grid[j].length;i++){
+      var v=grid[j][i];
+      zr.push(v>0?Math.log10(v):null); cr.push(v);
+    }
+    z.push(zr); cd.push(cr);
+  }
+  return {type:'heatmap', x:D.lons, y:D.lats, z:z, customdata:cd,
+    colorscale:INFERNO, zmin:-3, zmax:1, showscale:!!showbar,
+    colorbar:{tickvals:[-3,-2,-1,0,1],
+      ticktext:['10⁻³','10⁻²','10⁻¹','10⁰','10¹'],
+      thickness:12, len:.9, outlinewidth:0, tickfont:FONT},
+    hovertemplate:'lon %{x:.2f}、lat %{y:.2f}<br>%{customdata:.2e} 事件數／平方度／日<extra></extra>'};
+}
+function drawCurves(D, W){
+  var traces = W.curves.map(function(c, i){
+    return {type:'scatter', mode:'lines+markers', name:c.site,
+      x:['I3','I4','I5','I6','I7'], y:c.y, text:c.text,
+      line:{color:SITE_COLORS[i], width:2}, marker:{size:8, color:SITE_COLORS[i]},
+      hovertemplate:'%{text}<extra>'+c.site+'</extra>'};
+  });
+  Plotly.newPlot('curves', traces, {height:400, font:FONT,
+    margin:{l:56,r:16,t:8,b:40}, paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'#fffdf7',
+    xaxis:{title:{text:'震度 I₀', font:FONT}, showgrid:false},
+    yaxis:{title:{text:'超越機率 (%)', font:FONT}, gridcolor:'#ece3cf',
+           zeroline:false, rangemode:'tozero'},
+    legend:{orientation:'h', y:1.12, font:FONT}, hovermode:'closest'},
+    {displayModeBar:false, responsive:true});
+}
+function availW(){
+  var m = document.querySelector('main');
+  return Math.max(280, (m ? m.clientWidth : 1016) - 50);
+}
+function fitMap(w0, h0){
+  var w = Math.min(w0, availW());
+  return [w, Math.round(h0 * w / w0)];
+}
+function drawRateMaps(D){
+  var traces = [heatTrace(D, D.grids.conditional, false)].concat(coastTraces(D), [polyTrace(D), stationTrace(D)]);
+  var wh = fitMap(440, 600);
+  Plotly.newPlot('map-cond', traces, mapLayout(D, wh[0], wh[1]), {displayModeBar:false});
+}
+function drawTimeseries(D, W){
+  var TS = W.timeseries;
+  var traces = D.sites.map(function(site, i){
+    return {type:'scatter', mode:'lines', name:site, x:TS.times, y:TS.i3[i],
+      line:{color:SITE_COLORS[i], width:2},
+      hovertemplate:'%{y:.2f}%<extra>'+site+'</extra>'};
+  });
+  // Vertical lines = catalog quake times (depth colors as seismicity map; >35km gray dotted)
+  var marks = D.quake_marks || [];
+  var shapes = marks.map(function(q){
+    var deep = q.depth > 150;
+    return {type:'line', x0:q.t, x1:q.t, yref:'paper', y0:0, y1:1, layer:'below',
+      opacity:.55, line:{color: deep ? DEEP_EDGE : depthColor(q.depth),
+      width:1.4, dash: deep ? 'dot' : 'solid'}};
+  });
+  var ymax = 0;
+  TS.i3.forEach(function(a){ a.forEach(function(v){ if (v != null && v > ymax) ymax = v; }); });
+  if (marks.length){
+    traces.push({type:'scatter', mode:'markers', x:marks.map(function(q){return q.t;}),
+      y:marks.map(function(){return ymax * 1.06;}),
+      text:marks.map(function(q){return q.t + '<br>M' + q.mag.toFixed(1) + '、深度 ' + q.depth + ' km';}),
+      marker:{symbol:'triangle-down', size:9,
+        color:marks.map(function(q){return q.depth > 150 ? DEEP_FILL : depthColor(q.depth);}),
+        line:{color:'#ffffff', width:1}},
+      hovertemplate:'%{text}<extra>地震事件</extra>', showlegend:false, hoverinfo:'text'});
+  }
+  Plotly.newPlot('ts-i3', traces, {height:330, font:FONT,
+    margin:{l:56, r:16, t:42, b:42}, shapes:shapes,
+    paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'#fffdf7',
+    xaxis:{type:'date', gridcolor:'#f2ead6'},
+    yaxis:{title:{text:'震度 I ≥ I₃ 機率（%）', font:FONT}, gridcolor:'#ece3cf',
+           zeroline:false, rangemode:'tozero'},
+    legend:{orientation:'h', y:1.22, font:FONT}, hovermode:'closest'},
+    {displayModeBar:false, responsive:true});
+}
+function drawSimMap(D, W){
+  var traces = [heatTrace(D, D.grids.conditional, true)].concat(coastTraces(D), [polyTrace(D), stationTrace(D)]);
+  traces.push({type:'scatter', mode:'markers', x:W.sims.m6.map(function(e){return e.lon;}),
+    y:W.sims.m6.map(function(e){return e.lat;}),
+    text:W.sims.m6.map(function(e){return 'M'+e.mag.toFixed(1);}),
+    marker:{symbol:'star', size:W.sims.m6.map(function(e){return 13+(e.mag-6)*7;}),
+      color:'#ffe14d', line:{color:'#1c1c1c', width:1.2}},
+    hovertemplate:'%{text}<br>lon %{x:.2f}、lat %{y:.2f}<extra>模擬事件</extra>', showlegend:false});
+  var wh = fitMap(492, 600);
+  Plotly.newPlot('map-sim', traces, mapLayout(D, wh[0], wh[1]), {displayModeBar:false});
+  document.getElementById('sim-note').textContent =
+    '1000 次模擬中產生 ' + W.sims.m6.length + ' 個 M6+ 合成事件（星號）；底圖為 Conditional Intensity。';
+}
+function drawQuakeMap(D){
+  var events = D.recent;
+  var n24 = D.quakes24.length;
+  var note = document.getElementById('quake-note');
+  if (n24 === 0){
+    document.getElementById('quake-banner').style.display = 'block';
+    document.getElementById('quake-banner').textContent =
+      '近 24 小時內無目錄事件（目錄最新事件時間 ' + D.catalog_latest + '）。';
+  }
+  note.textContent = '目錄最新事件：' + D.catalog_latest + '｜近 24 小時內 ' + n24 +
+    ' 筆（紫紅字／紫紅圈＋脈動標示）｜列出最近 ' + events.length + ' 筆。' +
+    '僅顯示規模 M ≥ 3 之事件。事件資料來源：中央氣象署（CWA）地震速報。虛線範圍為 地殼震源分區（ETAS 參數最佳化區域；模型僅採用深度 150 km 內之地震，較深事件以灰色淡化呈現）。圓圈大小＝規模、顏色＝震源深度。三角形＝評估站點。點表格列或地圖圓圈可互相對應。地圖可縮放，右上角可切換底圖。';
+
+  var base = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+    {maxZoom:16, attribution:'Esri, HERE, Garmin, &copy; OpenStreetMap contributors'});
+  var hill = L.tileLayer('https://services.arcgisonline.com/arcgis/rest/services/Elevation/World_Hillshade/MapServer/tile/{z}/{y}/{x}',
+    {maxZoom:15, opacity:.5, attribution:'Esri World Hillshade'});
+  var labels = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}',
+    {maxZoom:16, attribution:''});
+  var terrain = L.layerGroup([base, hill, labels]);
+  var light = L.layerGroup([
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+      {maxZoom:16, attribution:'Esri, HERE, Garmin, &copy; OpenStreetMap contributors'}),
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}',
+      {maxZoom:16, attribution:''})]);
+  var osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    {maxZoom:18, attribution:'&copy; OpenStreetMap contributors'});
+  var isTouch = ('ontouchstart' in window) && window.innerWidth < 900;
+  var map = L.map('quakemap', {layers:[terrain], dragging: !isTouch}).setView([23.6, 121.85], 7);   // centre east of Taiwan so the legend does not cover eastern events
+  if (isTouch){
+    var lockCtl = L.control({position:'topleft'});
+    lockCtl.onAdd = function(){
+      var btn = L.DomUtil.create('button', 'depth-legend');
+      btn.style.cssText += ';cursor:pointer;border:none;margin-top:6px;';
+      btn.textContent = '🔒 點此啟用地圖拖曳';
+      L.DomEvent.on(btn, 'click', function(e){
+        L.DomEvent.stopPropagation(e);
+        if (map.dragging.enabled()){ map.dragging.disable(); btn.textContent = '🔒 點此啟用地圖拖曳'; }
+        else { map.dragging.enable(); btn.textContent = '🔓 拖曳已啟用（點此鎖定）'; }
+      });
+      return btn;
+    };
+    lockCtl.addTo(map);
+  }
+  L.control.layers({'地形暈渲＋地名':terrain,
+    '淡色底圖':light,
+    '街道圖（OpenStreetMap）':osm},
+    null, {position:'topright'}).addTo(map);
+  L.control.scale({imperial:false}).addTo(map);
+  L.polyline(D.polygon.concat([D.polygon[0]]).map(function(p){return [p[1], p[0]];}),
+    {color:'#5a5e63', weight:1.2, dashArray:'4 5', fill:false, interactive:false}).addTo(map);
+
+  map.createPane('stations');
+  map.getPane('stations').style.zIndex = 390;   // below event circles (overlay pane 400)
+  map.createPane('ripple');
+  map.getPane('ripple').style.zIndex = 395;   // between stations (390) and event circles (400)
+  map.getPane('ripple').style.pointerEvents = 'none';
+  var nowMs = Date.parse(String(D.generated).replace(' ', 'T'));
+  D.stations.forEach(function(st, i){
+    L.marker([st.lat, st.lon], {pane:'stations', interactive:true, keyboard:false,
+      icon: L.divIcon({className:'', iconSize:[16,16], iconAnchor:[8,10],
+        html:'<div style="color:' + SITE_COLORS[i] + ';font-size:15px;line-height:1;' +
+             'text-shadow:0 0 2px #fff,0 0 3px #fff;">▲</div>'})
+    }).addTo(map).bindTooltip(st.name, {direction:'top'});
+  });
+
+  var markers = [];
+  events.forEach(function(e, i){
+    var deep = e.depth > 150;
+    var m = L.circleMarker([e.lat, e.lon], {
+      radius: Math.max(4, (e.mag - 2) * 3.2 + 2),
+      fillColor: deep ? DEEP_FILL : depthColor(e.depth),
+      fillOpacity: deep ? 0.3 : 0.85,
+      color: e.is24 ? '#a8106e' : (deep ? DEEP_EDGE : '#ffffff'),
+      weight: e.is24 ? 3 : (deep ? 1.1 : 1.3),
+      dashArray: deep ? '3 3' : null
+    }).addTo(map).bindTooltip(
+      '<b>M' + e.mag.toFixed(1) + '</b>｜深度 ' + e.depth + ' km<br>' + e.t,
+      {direction:'top'});
+    m.on('click', function(){ selectEvent(i, true); });
+    markers.push(m);
+    if (e.is24){
+      // hue: 338 (crimson-magenta) when fresh -> 292 (violet) at 24 h old
+      var tMs = Date.parse(String(e.t).replace(' ', 'T'));
+      var ageH = (isNaN(nowMs) || isNaN(tMs)) ? 12 : Math.max(0, Math.min(24, (nowMs - tMs) / 3.6e6));
+      var hue = Math.round(338 - (338 - 292) * (ageH / 24));
+      var dia = Math.round(Math.max(4, (e.mag - 2) * 3.2 + 2) * 7);
+      var span = '<span style="--h:' + hue + ';--d:' + dia + 'px;"></span>';
+      L.marker([e.lat, e.lon], {pane:'ripple', interactive:false, keyboard:false,
+        icon: L.divIcon({className:'qk-ripple', iconSize:[0, 0], iconAnchor:[0, 0], html: span + span + span})
+      }).addTo(map);
+    }
+  });
+
+  var legend = L.control({position:'bottomright'});
+  legend.onAdd = function(){
+    var div = L.DomUtil.create('div', 'depth-legend');
+    div.innerHTML = '<b>震源深度</b>（模型採用 ≤ 150 km）<br>' + DEPTH_BINS.map(function(b){
+      return '<span class="dot" style="background:' + b[1] + ';"></span>' + b[2];
+    }).join('<br>') +
+    '<br><span class="dot" style="background:' + DEEP_FILL + ';opacity:.55;border-color:' + DEEP_EDGE + ';"></span>&gt; 150 km（未納入模型）' +
+    '<div style="margin:9px 0 0;"><span class="qk-legend-dot"></span>近 24 小時事件（脈動標示）</div>' +
+    '<div style="margin:9px 0 9px;"><b>圓圈大小</b>＝規模</div>' +
+    '<hr style="border:0;border-top:1px solid #e6dcc9;margin:0 0 5px;">' +
+    '<span style="font-size:13px;">▲</span> 評估站點';
+    return div;
+  };
+  legend.addTo(map);
+
+  var hl = L.circleMarker([0, 0], {radius:16, color:'#111111', weight:3,
+    fill:false, interactive:false});
+
+  var tb = document.querySelector('#quaketab tbody');
+  events.forEach(function(e, i){
+    var tr = document.createElement('tr');
+    tr.id = 'qrow-' + i;
+    if (e.is24){ tr.style.fontWeight = '800'; tr.style.fontSize = '1.12em'; tr.style.color = '#a8106e'; }
+    else if (e.depth > 150){ tr.style.color = '#8a8f96'; }
+    tr.style.cursor = 'pointer';
+    tr.innerHTML = '<td>'+e.t+'</td><td class="num">M'+e.mag.toFixed(1)+'</td>'+
+      '<td class="num">'+e.depth+'</td><td class="num">'+e.lon.toFixed(2)+'</td><td class="num">'+e.lat.toFixed(2)+'</td>';
+    tr.addEventListener('click', function(){ selectEvent(i, false); });
+    tb.appendChild(tr);
+  });
+
+  var selected = -1;
+  function selectEvent(i, scrollTable){
+    var rows = tb.querySelectorAll('tr');
+    if (selected >= 0) rows[selected].style.background = '';
+    selected = i;
+    var e = events[i];
+    rows[i].style.background = '#fde8ea';
+    if (scrollTable) rows[i].scrollIntoView({block:'nearest', behavior:'smooth'});
+    hl.setLatLng([e.lat, e.lon]);
+    if (!map.hasLayer(hl)) hl.addTo(map);
+    hl.setRadius(markers[i].getRadius() + 7);
+    if (!map.getBounds().contains([e.lat, e.lon])) map.panTo([e.lat, e.lon]);
+  }
+  if (location.hash.indexOf('#ev') === 0){
+    var k = parseInt(location.hash.slice(3), 10);
+    if (!isNaN(k) && events[k]) selectEvent(k, true);
+  }
+  window.selectEvent = selectEvent;
+}
+document.addEventListener('keydown', function(e){
+  if (e.key === 'Escape') document.getElementById('about-modal').classList.remove('open');
+});
+if (location.hash === '#about') document.getElementById('about-modal').classList.add('open');
+function winData(D, w){
+  if (w === '72' && D.w72) return {curves:D.w72.curves, timeseries:D.w72.timeseries, sims:D.w72.sims};
+  return {curves:D.curves, timeseries:D.timeseries, sims:D.sims};
+}
+function applyWindow(D, w){
+  if (w !== '72' || !D.w72) w = '24';
+  document.body.setAttribute('data-win', w);
+  var W = winData(D, w), i;
+  var hs = document.querySelectorAll('.wh'); for (i = 0; i < hs.length; i++) hs[i].textContent = w;
+  var vs = document.querySelectorAll('.wv'); for (i = 0; i < vs.length; i++) vs[i].textContent = vs[i].getAttribute('data-v' + w) || '';
+  var bs = document.querySelectorAll('.winsw button');
+  for (i = 0; i < bs.length; i++) bs[i].classList.toggle('on', bs[i].getAttribute('data-win') === w);
+  drawCurves(D, W);
+  if (W.timeseries) drawTimeseries(D, W);
+  if (W.sims && D.grids) drawSimMap(D, W);
+  try { localStorage.setItem('etas_win', w); } catch (e) {}
+}
+fetch('etas_data.json').then(function(r){return r.json();}).then(function(D){
+  var w = '24', q = /[?&]win=(24|72)/.exec(location.search);
+  if (q) w = q[1]; else { try { w = localStorage.getItem('etas_win') || '24'; } catch (e) {} }
+  if (!D.w72){ var sw = document.querySelector('.winsw'); if (sw) sw.style.display = 'none'; }
+  if (D.grids) drawRateMaps(D);
+  if (D.recent) drawQuakeMap(D);
+  applyWindow(D, w);
+  var bs = document.querySelectorAll('.winsw button');
+  for (var k = 0; k < bs.length; k++) bs[k].addEventListener('click', function(){ applyWindow(D, this.getAttribute('data-win')); });
+}).catch(function(e){ console.error(e); });
+</script>
+</body></html>
